@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distributed Tracing Demo — Datadog APM</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 24px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; color: #7dd3fc; margin-bottom: 4px; }
+  .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 13px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+  label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  input, select { background: #0f1117; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; font-size: 13px; outline: none; }
+  input:focus, select:focus { border-color: #7dd3fc; }
+
+  button { background: #2563eb; color: white; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+  button.danger { background: #dc2626; }
+  button.danger:hover { background: #b91c1c; }
+
+  .correlation-box { background: #0f1117; border: 1px solid #334155; border-radius: 8px; padding: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .corr-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+  .corr-id { font-family: monospace; font-size: 13px; color: #7dd3fc; background: #1e293b; padding: 4px 10px; border-radius: 4px; border: 1px solid #334155; }
+  .copy-btn { font-size: 11px; padding: 4px 10px; background: #334155; }
+  .copy-btn:hover { background: #475569; }
+
+  .journey { display: flex; flex-direction: column; gap: 6px; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; background: #0f1117; border: 1px solid #334155; font-size: 12px; transition: all 0.3s; }
+  .step.active { border-color: #3b82f6; background: #172033; }
+  .step.success { border-color: #22c55e; background: #052e16; }
+  .step.error { border-color: #ef4444; background: #2d0a0a; }
+  .step.pending { opacity: 0.4; }
+  .step-icon { font-size: 18px; width: 24px; text-align: center; }
+  .step-name { font-weight: 600; color: #cbd5e1; flex: 1; }
+  .step-status { font-size: 11px; color: #64748b; }
+  .step-time { font-size: 11px; color: #64748b; text-align: right; min-width: 60px; }
+  .connector { width: 2px; height: 12px; background: #334155; margin: 0 0 0 22px; }
+  .connector.done { background: #22c55e; }
+
+  .result-box { padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; }
+  .result-success { background: #052e16; border: 1px solid #22c55e; color: #86efac; }
+  .result-error { background: #2d0a0a; border: 1px solid #ef4444; color: #fca5a5; }
+
+  .log-feed { background: #0f1117; border: 1px solid #334155; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; max-height: 220px; overflow-y: auto; }
+  .log-entry { padding: 2px 0; line-height: 1.5; }
+  .log-info { color: #7dd3fc; }
+  .log-success { color: #86efac; }
+  .log-error { color: #fca5a5; }
+  .log-warn { color: #fde68a; }
+  .log-ts { color: #475569; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { background: #0f1117; border: 1px solid #334155; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-val { font-size: 22px; font-weight: 700; }
+  .stat-label { font-size: 10px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-success .stat-val { color: #22c55e; }
+  .stat-error .stat-val { color: #ef4444; }
+  .stat-total .stat-val { color: #7dd3fc; }
+  .stat-rate .stat-val { color: #f59e0b; }
+
+  .dd-link { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #7dd3fc; text-decoration: none; padding: 6px 12px; border: 1px solid #334155; border-radius: 6px; background: #0f1117; transition: all 0.2s; }
+  .dd-link:hover { border-color: #7dd3fc; background: #172033; }
+
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #334155; border-top-color: #7dd3fc; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+  .fadein { animation: fadeIn 0.3s ease; }
+
+  .bulk-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bulk-badge { font-size: 11px; background: #1e3a5f; color: #7dd3fc; padding: 3px 8px; border-radius: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔍 Distributed Tracing Demo</h1>
+  <p class="subtitle">Every request generates a Correlation ID that flows through all 5 microservices — visible in Datadog APM</p>
+
+  <!-- Send Request -->
+  <div class="card">
+    <div class="card-title">Send a Request</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>User ID</label>
+        <input type="text" id="userId" value="usr-rajkot-01" placeholder="usr-xxxx">
+      </div>
+      <div class="form-group">
+        <label>Action</label>
+        <select id="action">
+          <option value="checkout">Checkout</option>
+          <option value="recommend">AI Recommend</option>
+          <option value="search">Search</option>
+          <option value="profile">Profile Update</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0">
+        <label>&nbsp;</label>
+        <button id="sendBtn" onclick="sendRequest()">▶ Send Request</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="card-title">Bulk Load Test</div>
+      <div class="bulk-controls">
+        <button onclick="bulkTest(5)" style="background:#7c3aed;font-size:12px;padding:7px 14px">Send 5 Requests</button>
+        <button onclick="bulkTest(20)" style="background:#7c3aed;font-size:12px;padding:7px 14px">Send 20 Requests</button>
+        <button class="danger" style="font-size:12px;padding:7px 14px" onclick="clearStats()">Clear Stats</button>
+        <span class="bulk-badge" id="bulkStatus"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="card-title">Live Stats — This Session</div>
+    <div class="stats">
+      <div class="stat stat-total"><div class="stat-val" id="totalReqs">0</div><div class="stat-label">Total Requests</div></div>
+      <div class="stat stat-success"><div class="stat-val" id="successReqs">0</div><div class="stat-label">Successful</div></div>
+      <div class="stat stat-error"><div class="stat-val" id="errorReqs">0</div><div class="stat-label">Failed</div></div>
+      <div class="stat stat-rate"><div class="stat-val" id="errorRate">0%</div><div class="stat-label">Error Rate</div></div>
+    </div>
+  </div>
+
+  <!-- Correlation ID -->
+  <div class="card" id="correlationCard" style="display:none">
+    <div class="card-title">Correlation ID — Search This in Datadog</div>
+    <div class="correlation-box">
+      <span class="corr-label">Correlation ID</span>
+      <span class="corr-id" id="corrIdDisplay">—</span>
+      <button class="copy-btn" onclick="copyCorrelationId()">📋 Copy</button>
+      <span id="copyConfirm" style="font-size:11px;color:#86efac;display:none">✓ Copied!</span>
+      <a class="dd-link" id="ddTraceLink" href="https://app.datadoghq.com/apm/traces" target="_blank">
+        🐕 Open in Datadog APM ↗
+      </a>
+    </div>
+    <p style="font-size:11px;color:#64748b;margin-top:8px">
+      👉 Go to Datadog → APM → Traces → search <code style="color:#7dd3fc">@http.headers.x-correlation-id:&lt;id&gt;</code> to see the full journey
+    </p>
+  </div>
+
+  <!-- Journey Steps -->
+  <div class="card" id="journeyCard" style="display:none">
+    <div class="card-title">Request Journey</div>
+    <div class="journey" id="journey"></div>
+  </div>
+
+  <!-- Result -->
+  <div id="resultBox" style="display:none" class="card">
+    <div class="card-title">Response</div>
+    <div id="resultContent"></div>
+  </div>
+
+  <!-- Live Log Feed -->
+  <div class="card">
+    <div class="card-title">Live Log Feed (Client-side)</div>
+    <div class="log-feed" id="logFeed">
+      <div class="log-entry log-info"><span class="log-ts">[ready]</span> Waiting for requests...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:4000';
+let stats = { total: 0, success: 0, error: 0 };
+let currentCorrId = null;
+
+const SERVICES = [
+  { id: 'frontend',    icon: '🌐', name: 'Frontend' },
+  { id: 'gateway',     icon: '🚪', name: 'API Gateway' },
+  { id: 'backend1',    icon: '⚙️', name: 'Backend 1' },
+  { id: 'backend2',    icon: '🔧', name: 'Backend 2' },
+  { id: 'ai',          icon: '🤖', name: 'AI Service' },
+  { id: 'db',          icon: '💾', name: 'DB Service' },
+];
+
+function log(msg, type = 'info') {
+  const feed = document.getElementById('logFeed');
+  const ts = new Date().toLocaleTimeString();
+  const div = document.createElement('div');
+  div.className = `log-entry log-${type} fadein`;
+  div.innerHTML = `<span class="log-ts">[${ts}]</span> ${msg}`;
+  feed.appendChild(div);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function renderJourney(states) {
+  const j = document.getElementById('journey');
+  j.innerHTML = '';
+  SERVICES.forEach((svc, i) => {
+    const state = states[svc.id] || 'pending';
+    const step = document.createElement('div');
+    step.className = `step ${state} fadein`;
+    step.id = `step-${svc.id}`;
+    step.innerHTML = `
+      <span class="step-icon">${svc.icon}</span>
+      <span class="step-name">${svc.name}</span>
+      <span class="step-status" id="status-${svc.id}">${state === 'active' ? '<span class="spinner"></span> Processing...' : state === 'pending' ? 'Waiting' : state === 'success' ? '✓ Success' : '✗ Failed'}</span>
+      <span class="step-time" id="time-${svc.id}"></span>
+    `;
+    j.appendChild(step);
+    if (i < SERVICES.length - 1) {
+      const conn = document.createElement('div');
+      conn.className = `connector ${state === 'success' ? 'done' : ''}`;
+      conn.id = `conn-${svc.id}`;
+      j.appendChild(conn);
+    }
+  });
+}
+
+function updateStep(id, state, time) {
+  const step = document.getElementById(`step-${id}`);
+  if (!step) return;
+  step.className = `step ${state}`;
+  const statusEl = document.getElementById(`status-${id}`);
+  if (statusEl) statusEl.innerHTML = state === 'success' ? '✓ Success' : state === 'error' ? '✗ Failed' : state === 'active' ? '<span class="spinner"></span> Processing...' : 'Waiting';
+  const timeEl = document.getElementById(`time-${id}`);
+  if (timeEl && time) timeEl.textContent = `${time}ms`;
+  const conn = document.getElementById(`conn-${id}`);
+  if (conn && state === 'success') conn.className = 'connector done';
+}
+
+async function sendRequest(silent = false) {
+  const userId = document.getElementById('userId').value || 'usr-demo';
+  const action = document.getElementById('action').value;
+  const corrId = `corr-${userId}-${Date.now()}`;
+
+  if (!silent) {
+    document.getElementById('correlationCard').style.display = 'block';
+    document.getElementById('journeyCard').style.display = 'block';
+    document.getElementById('corrIdDisplay').textContent = corrId;
+    currentCorrId = corrId;
+
+    // Animate journey steps
+    renderJourney({});
+    const timings = [0, 80, 180, 320, 500, 900];
+    const stepIds = ['frontend','gateway','backend1','backend2','ai','db'];
+    updateStep('frontend', 'active');
+    log(`New request: correlationId=${corrId} userId=${userId} action=${action}`);
+  }
+
+  const start = Date.now();
+  document.getElementById('sendBtn').disabled = true;
+
+  if (!silent) {
+    // Animate steps progressively
+    let i = 0;
+    const animTimer = setInterval(() => {
+      if (i > 0) updateStep(SERVICES[i-1].id, 'success', Math.round(Math.random()*80+20*(i)));
+      if (i < SERVICES.length) updateStep(SERVICES[i].id, 'active');
+      i++;
+      if (i > 3) clearInterval(animTimer); // Let real response handle the rest
+    }, 180);
+  }
+
+  try {
+    const resp = await fetch(`${API}/api/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-correlation-id': corrId,
+        'x-user-id': userId
+      },
+      body: JSON.stringify({ action, userId, payload: { item: 'test-item-123', qty: 1 } })
+    });
+
+    const data = await resp.json();
+    const elapsed = Date.now() - start;
+    stats.total++;
+
+    if (data.success) {
+      stats.success++;
+      if (!silent) {
+        ['frontend','gateway','backend1','backend2','ai','db'].forEach(id => updateStep(id, 'success'));
+        document.getElementById('resultBox').style.display = 'block';
+        document.getElementById('resultContent').innerHTML = `<div class="result-box result-success">✅ <strong>Success</strong> in ${elapsed}ms<br>Correlation ID: <code>${corrId}</code><br><pre style="margin-top:8px;font-size:11px;opacity:0.8">${JSON.stringify(data.result || data, null, 2)}</pre></div>`;
+        log(`✅ SUCCESS | corrId=${corrId} | ${elapsed}ms`, 'success');
+      }
+    } else {
+      stats.error++;
+      if (!silent) {
+        const failedAt = data.failedAt || 'unknown';
+        const failMap = { 'ai-service': 'ai', 'db-service': 'db', 'backend-2': 'backend2', 'backend-1': 'backend1' };
+        const failKey = failMap[failedAt] || 'ai';
+        const stepIds = ['frontend','gateway','backend1','backend2','ai','db'];
+        const failIdx = stepIds.indexOf(failKey);
+        stepIds.forEach((id, i) => {
+          if (i < failIdx) updateStep(id, 'success');
+          else if (i === failIdx) updateStep(id, 'error');
+          else updateStep(id, 'pending');
+        });
+        document.getElementById('resultBox').style.display = 'block';
+        document.getElementById('resultContent').innerHTML = `<div class="result-box result-error">❌ <strong>Failed at: ${failedAt}</strong> (${elapsed}ms)<br>Error: ${data.error}<br>Correlation ID: <code>${corrId}</code></div>`;
+        log(`❌ FAILED at ${failedAt} | corrId=${corrId} | ${data.error}`, 'error');
+      }
+    }
+  } catch (err) {
+    stats.error++;
+    if (!silent) log(`❌ Network error: ${err.message}`, 'error');
+  }
+
+  updateStatsUI();
+  document.getElementById('sendBtn').disabled = false;
+}
+
+async function bulkTest(count) {
+  const badge = document.getElementById('bulkStatus');
+  badge.textContent = `Running ${count} requests...`;
+  const promises = Array.from({length: count}, (_, i) =>
+    new Promise(res => setTimeout(() => sendRequest(true).then(res), i * 150))
+  );
+  await Promise.all(promises);
+  badge.textContent = `✓ ${count} requests done`;
+  log(`Bulk test complete: ${count} requests sent`, 'warn');
+  setTimeout(() => badge.textContent = '', 3000);
+}
+
+function updateStatsUI() {
+  document.getElementById('totalReqs').textContent = stats.total;
+  document.getElementById('successReqs').textContent = stats.success;
+  document.getElementById('errorReqs').textContent = stats.error;
+  const rate = stats.total > 0 ? Math.round((stats.error / stats.total) * 100) : 0;
+  document.getElementById('errorRate').textContent = rate + '%';
+}
+
+function copyCorrelationId() {
+  navigator.clipboard.writeText(currentCorrId || '');
+  const el = document.getElementById('copyConfirm');
+  el.style.display = 'inline';
+  setTimeout(() => el.style.display = 'none', 2000);
+}
+
+function clearStats() {
+  stats = { total: 0, success: 0, error: 0 };
+  updateStatsUI();
+  document.getElementById('logFeed').innerHTML = '<div class="log-entry log-info"><span class="log-ts">[cleared]</span> Stats reset.</div>';
+}
+</script>
+</body>
+</html>

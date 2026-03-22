@@ -1,0 +1,131 @@
+version: "3.8"
+
+services:
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:latest
+    container_name: datadog-agent
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=us5.datadoghq.com
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_CONTAINER_EXCLUDE="name:datadog-agent"
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    ports:
+      - "8126:8126"
+      - "8125:8125/udp"
+    networks:
+      - demo-net
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=frontend
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"frontend"}]'
+    depends_on:
+      - api-gateway
+    networks:
+      - demo-net
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "4000:4000"    # ← port exposed so browser can reach it
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=api-gateway
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+      - BACKEND1_URL=http://backend-1:5001
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"api-gateway"}]'
+    depends_on:
+      - backend-1
+    networks:
+      - demo-net
+
+  backend-1:
+    build: ./backend-1
+    container_name: backend-1
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=backend-1
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+      - BACKEND2_URL=http://backend-2:5002
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"backend-1"}]'
+    depends_on:
+      - backend-2
+    networks:
+      - demo-net
+
+  backend-2:
+    build: ./backend-2
+    container_name: backend-2
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=backend-2
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+      - AI_SERVICE_URL=http://ai-service:5003
+      - DB_SERVICE_URL=http://db-service:5004
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"backend-2"}]'
+    depends_on:
+      - ai-service
+      - db-service
+    networks:
+      - demo-net
+
+  ai-service:
+    build: ./ai-service
+    container_name: ai-service
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=ai-service
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+      - ERROR_RATE=20    # ← reduced from 40% to 20%
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"ai-service"}]'
+    networks:
+      - demo-net
+
+  db-service:
+    build: ./db-service
+    container_name: db-service
+    environment:
+      - DD_AGENT_HOST=datadog-agent
+      - DD_TRACE_AGENT_PORT=8126
+      - DD_SERVICE=db-service
+      - DD_ENV=demo
+      - DD_VERSION=1.0.0
+      - ERROR_RATE=10    # ← reduced from 15% to 10%
+    labels:
+      com.datadoghq.ad.logs: '[{"source":"nodejs","service":"db-service"}]'
+    networks:
+      - demo-net
+
+networks:
+  demo-net:
+    driver: bridge
